@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Zara AI</string>
+    <string name="accessibility_service_desc">Zara AI Assistive Automation Service enables Zara to read on-screen UI elements, understand content, and assist with hands-free navigation when explicitly enabled.</string>
+    <string name="assistant_notification_title">Zara AI Active</string>
+    <string name="assistant_notification_desc">Zara is standing by for voice commands and phone assistance.</string>
+    <string name="emergency_stop">Emergency Stop</string>
+    <string name="status_online">CORE ONLINE</string>
+    <string name="status_listening">LISTENING…</string>
+    <string name="status_thinking">ANALYZING INTENT…</string>
+    <string name="status_speaking">SPEAKING…</string>
+    <string name="status_executing">EXECUTING ACTION…</string>
+    <string name="mode_girlfriend">Girlfriend Mode</string>
+    <string name="mode_assistant">Assistant Mode</string>
+    <string name="mode_focus">Focus Mode</string>
+    <string name="mode_professional">Professional Mode</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "Zara AI",
+  "description": "Futuristic AI Girlfriend & Smart Phone Assistant",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
