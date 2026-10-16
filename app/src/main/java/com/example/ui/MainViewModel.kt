@@ -116,8 +116,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _aiState.value = AiCoreState.SPEAKING
                     _statusText.value = "ZARA IS SPEAKING..."
                 } else if (_aiState.value == AiCoreState.SPEAKING) {
-                    _aiState.value = AiCoreState.IDLE
-                    _statusText.value = "CORE ONLINE // STANDBY"
+                    if (voiceManager.isLiveVoiceActive.value) {
+                        _aiState.value = AiCoreState.LISTENING
+                        _statusText.value = "LISTENING... SPEAK FREELY"
+                    } else {
+                        _aiState.value = AiCoreState.IDLE
+                        _statusText.value = "CORE ONLINE // STANDBY"
+                    }
                 }
             }
         }
@@ -157,21 +162,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleVoiceListening() {
-        if (voiceManager.isListening.value) {
-            voiceManager.stopListening()
+    fun toggleLiveVoiceMode() {
+        val currentlyActive = voiceManager.isLiveVoiceActive.value
+        val newState = !currentlyActive
+        voiceManager.setLiveVoiceMode(newState)
+        if (newState) {
+            _aiState.value = AiCoreState.LISTENING
+            _statusText.value = "LIVE CONVERSATION ON // SPEAK FREELY"
+            _lastActivity.value = "Live voice active. You can talk continuously without holding any button."
+            vibrateQuick()
+        } else {
             _aiState.value = AiCoreState.IDLE
             _statusText.value = "CORE ONLINE // STANDBY"
-        } else {
-            voiceManager.stopSpeaking()
-            voiceManager.startListening()
+            _lastActivity.value = "Live voice paused."
         }
+    }
+
+    fun toggleVoiceListening() {
+        // Tapping the mic toggles continuous Live Voice so user never needs to hold
+        toggleLiveVoiceMode()
     }
 
     fun stopSpeaking() {
         voiceManager.stopSpeaking()
-        _aiState.value = AiCoreState.IDLE
-        _statusText.value = "CORE ONLINE // STANDBY"
+        if (voiceManager.isLiveVoiceActive.value) {
+            _aiState.value = AiCoreState.LISTENING
+            _statusText.value = "LISTENING... SPEAK FREELY"
+        } else {
+            _aiState.value = AiCoreState.IDLE
+            _statusText.value = "CORE ONLINE // STANDBY"
+        }
     }
 
     fun handleUserInput(prompt: String) {

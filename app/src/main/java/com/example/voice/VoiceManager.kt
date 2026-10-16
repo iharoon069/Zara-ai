@@ -32,6 +32,9 @@ class VoiceManager(
     private val _isSpeaking = MutableStateFlow(false)
     val isSpeaking: StateFlow<Boolean> = _isSpeaking.asStateFlow()
 
+    private val _isLiveVoiceActive = MutableStateFlow(false)
+    val isLiveVoiceActive: StateFlow<Boolean> = _isLiveVoiceActive.asStateFlow()
+
     private val _audioAmplitude = MutableStateFlow(0f)
     val audioAmplitude: StateFlow<Float> = _audioAmplitude.asStateFlow()
 
@@ -49,6 +52,7 @@ class VoiceManager(
 
     private fun initSpeechRecognizer() {
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            speechRecognizer?.destroy()
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
                 setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
@@ -61,7 +65,6 @@ class VoiceManager(
                     }
 
                     override fun onRmsChanged(rmsdB: Float) {
-                        // Normalize -2dB..10dB to 0..1
                         val normalized = ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
                         _audioAmplitude.value = normalized
                     }
@@ -78,7 +81,21 @@ class VoiceManager(
                         _isListening.value = false
                         _audioAmplitude.value = 0f
                         onListeningStateChanged(false)
-                        Log.d("VoiceManager", "Speech recognition error: $error")
+                        Log.d("VoiceManager", "Speech recognition error code: $error")
+
+                        // In Live Voice Mode, automatically retry listening on silence or no-match
+                        if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                            if (error == SpeechRecognizer.ERROR_NO_MATCH ||
+                                error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                                error == SpeechRecognizer.ERROR_AUDIO
+                            ) {
+                                mainHandler.postDelayed({
+                                    if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                                        startListeningInternal()
+                                    }
+                                }, 600)
+                            }
+                        }
                     }
 
                     override fun onResults(results: Bundle?) {
@@ -90,6 +107,13 @@ class VoiceManager(
                         if (!text.isNullOrBlank()) {
                             _spokenTextLive.value = text
                             onSpeechRecognized(text)
+                        } else if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                            // Resume listening if nothing captured
+                            mainHandler.postDelayed({
+                                if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                                    startListeningInternal()
+                                }
+                            }, 500)
                         }
                     }
 
@@ -108,30 +132,43 @@ class VoiceManager(
         }
     }
 
-    fun startListening() {
-        // Cancel any active speech immediately when user starts talking
-        stopSpeaking()
+    fun setLiveVoiceMode(enabled: Boolean) {
+        _isLiveVoiceActive.value = enabled
+        if (enabled) {
+            stopSpeaking()
+            startListening()
+        } else {
+            stopListening()
+            stopSpeaking()
+        }
+    }
 
+    fun startListening() {
+        stopSpeaking()
         mainHandler.post {
-            try {
-                if (speechRecognizer == null) {
-                    initSpeechRecognizer()
-                }
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                }
-                _spokenTextLive.value = ""
-                speechRecognizer?.startListening(intent)
-                _isListening.value = true
-                onListeningStateChanged(true)
-            } catch (e: Exception) {
-                Log.e("VoiceManager", "Error starting listening", e)
-                _isListening.value = false
-                onListeningStateChanged(false)
+            startListeningInternal()
+        }
+    }
+
+    private fun startListeningInternal() {
+        try {
+            if (speechRecognizer == null) {
+                initSpeechRecognizer()
             }
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            }
+            _spokenTextLive.value = ""
+            speechRecognizer?.startListening(intent)
+            _isListening.value = true
+            onListeningStateChanged(true)
+        } catch (e: Exception) {
+            Log.e("VoiceManager", "Error starting listening", e)
+            _isListening.value = false
+            onListeningStateChanged(false)
         }
     }
 
@@ -152,12 +189,10 @@ class VoiceManager(
         if (status == TextToSpeech.SUCCESS) {
             isTtsInitialized = true
             textToSpeech?.let { tts ->
-                // Try selecting available English or localized voice
                 val result = tts.setLanguage(Locale.US)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                     tts.setLanguage(Locale.getDefault())
                 }
-                // Try to set a feminine voice if available in the voice set
                 try {
                     val voices = tts.voices
                     val feminineVoice = voices?.firstOrNull { voice ->
@@ -180,11 +215,27 @@ class VoiceManager(
                     override fun onDone(utteranceId: String?) {
                         _isSpeaking.value = false
                         _audioAmplitude.value = 0f
+
+                        // In Live Voice Mode, automatically resume listening after speaking completes!
+                        if (_isLiveVoiceActive.value) {
+                            mainHandler.postDelayed({
+                                if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                                    startListeningInternal()
+                                }
+                            }, 400)
+                        }
                     }
 
                     override fun onError(utteranceId: String?) {
                         _isSpeaking.value = false
                         _audioAmplitude.value = 0f
+                        if (_isLiveVoiceActive.value) {
+                            mainHandler.postDelayed({
+                                if (_isLiveVoiceActive.value && !_isSpeaking.value) {
+                                    startListeningInternal()
+                                }
+                            }, 400)
+                        }
                     }
                 })
             }
@@ -196,7 +247,6 @@ class VoiceManager(
         stopListening()
         mainHandler.post {
             try {
-                // Strip out action tags so Zara doesn't read "[ACTION:...]" aloud
                 val cleanSpeech = text
                     .replace(Regex("\\[ACTION:[^\\]]+\\]"), "")
                     .trim()

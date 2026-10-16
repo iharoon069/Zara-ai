@@ -78,6 +78,7 @@ fun HomeScreen(
     val audioAmp by viewModel.voiceManager.audioAmplitude.collectAsState()
     val isListening by viewModel.voiceManager.isListening.collectAsState()
     val isSpeaking by viewModel.voiceManager.isSpeaking.collectAsState()
+    val isLiveVoiceActive by viewModel.voiceManager.isLiveVoiceActive.collectAsState()
     val inputText by viewModel.inputText.collectAsState()
     val personalityMode by viewModel.preferences.personalityMode.collectAsState()
     val ttsEnabled by viewModel.preferences.ttsEnabled.collectAsState()
@@ -120,7 +121,7 @@ fun HomeScreen(
                     )
                 }
                 Text(
-                    text = "NEURAL COMPANION // v2.5",
+                    text = "GEMINI 3.8 LIVE // NEURAL",
                     color = ZaraTextMuted,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -129,11 +130,47 @@ fun HomeScreen(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Live Voice Mode Master Toggle Button
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(
+                            if (isLiveVoiceActive) ZaraNeonGreen.copy(alpha = 0.2f)
+                            else ZaraGlassSurfaceLighter
+                        )
+                        .border(
+                            1.dp,
+                            if (isLiveVoiceActive) ZaraNeonGreen else ZaraGlassBorder,
+                            RoundedCornerShape(20.dp)
+                        )
+                        .clickable { viewModel.toggleLiveVoiceMode() }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                        .testTag("button_live_voice_mode"),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isLiveVoiceActive) Icons.Default.Mic else Icons.Default.MicOff,
+                        contentDescription = "Live Voice Mode",
+                        tint = if (isLiveVoiceActive) ZaraNeonGreen else ZaraTextMuted,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text(
+                        text = if (isLiveVoiceActive) "LIVE ON" else "LIVE OFF",
+                        color = if (isLiveVoiceActive) ZaraNeonGreen else ZaraTextSecondary,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 // Speaker toggle button
                 IconButton(
                     onClick = { viewModel.preferences.setTtsEnabled(!ttsEnabled) },
                     modifier = Modifier
-                        .size(40.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(ZaraGlassSurfaceLighter)
                         .border(1.dp, ZaraGlassBorder, CircleShape)
@@ -143,18 +180,18 @@ fun HomeScreen(
                         imageVector = if (ttsEnabled) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
                         contentDescription = "Toggle Speech",
                         tint = if (ttsEnabled) ZaraNeonCyan else ZaraTextMuted,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(17.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Stop speaking / Emergency stop button if speaking
                 if (isSpeaking) {
                     IconButton(
                         onClick = { viewModel.stopSpeaking() },
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(ZaraNeonRed.copy(alpha = 0.2f))
                             .border(1.dp, ZaraNeonRed, CircleShape)
@@ -164,14 +201,40 @@ fun HomeScreen(
                             imageVector = Icons.Default.Stop,
                             contentDescription = "Stop Speech",
                             tint = ZaraNeonRed,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        if (isLiveVoiceActive) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ZaraNeonGreen.copy(alpha = 0.15f))
+                    .border(1.dp, ZaraNeonGreen.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(ZaraNeonGreen)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "LIVE VOICE ON // SPEAK FREELY",
+                    color = ZaraNeonGreen,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.5.sp
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+        }
 
         // Center Animated AI Core
         Box(

@@ -2,6 +2,9 @@ package com.example.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.accessibilityservice.GestureDescription
+import android.graphics.Path
+import android.os.Build
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -62,6 +65,82 @@ class ZaraAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             Log.e("ZaraAccessibility", "Error processing event", e)
+        }
+    }
+
+    fun performClickByText(target: String): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val cleanTarget = target.lowercase().trim()
+
+        fun searchAndClick(node: AccessibilityNodeInfo): Boolean {
+            val text = node.text?.toString()?.lowercase() ?: ""
+            val desc = node.contentDescription?.toString()?.lowercase() ?: ""
+
+            if (text.contains(cleanTarget) || desc.contains(cleanTarget)) {
+                // If this node is clickable, perform click
+                if (node.isClickable) {
+                    return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                }
+                // Try parent nodes
+                var parent = node.parent
+                while (parent != null) {
+                    if (parent.isClickable) {
+                        return parent.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                    }
+                    parent = parent.parent
+                }
+                return node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { child ->
+                    if (searchAndClick(child)) return true
+                }
+            }
+            return false
+        }
+
+        return searchAndClick(root)
+    }
+
+    fun performTouchCoordinates(x: Float, y: Float): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            val path = Path().apply {
+                moveTo(x, y)
+            }
+            val stroke = GestureDescription.StrokeDescription(path, 0, 100)
+            val gesture = GestureDescription.Builder().addStroke(stroke).build()
+            return dispatchGesture(gesture, null, null)
+        }
+        return false
+    }
+
+    fun performScroll(forward: Boolean): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val action = if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+
+        fun searchScrollable(node: AccessibilityNodeInfo): Boolean {
+            if (node.isScrollable) {
+                return node.performAction(action)
+            }
+            for (i in 0 until node.childCount) {
+                node.getChild(i)?.let { child ->
+                    if (searchScrollable(child)) return true
+                }
+            }
+            return false
+        }
+
+        return searchScrollable(root)
+    }
+
+    fun performGlobal(action: String): Boolean {
+        return when (action.lowercase()) {
+            "back" -> performGlobalAction(GLOBAL_ACTION_BACK)
+            "home" -> performGlobalAction(GLOBAL_ACTION_HOME)
+            "recents" -> performGlobalAction(GLOBAL_ACTION_RECENTS)
+            "notifications" -> performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS)
+            else -> false
         }
     }
 

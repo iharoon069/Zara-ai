@@ -105,11 +105,36 @@ class DeviceActionManager(private val context: Context) {
                     val text = json.optString("text", "")
                     copyToClipboard(text)
                 }
+                tag.startsWith("[ACTION:CLICK:") -> {
+                    val jsonStr = tag.substringAfter("[ACTION:CLICK:").substringBeforeLast("]")
+                    val json = JSONObject(jsonStr)
+                    val target = json.optString("target", "")
+                    clickOnScreen(target)
+                }
+                tag.startsWith("[ACTION:TOUCH:") -> {
+                    val jsonStr = tag.substringAfter("[ACTION:TOUCH:").substringBeforeLast("]")
+                    val json = JSONObject(jsonStr)
+                    val x = json.optDouble("x", 500.0).toFloat()
+                    val y = json.optDouble("y", 800.0).toFloat()
+                    touchCoordinates(x, y)
+                }
+                tag.startsWith("[ACTION:SCROLL:") -> {
+                    val jsonStr = tag.substringAfter("[ACTION:SCROLL:").substringBeforeLast("]")
+                    val json = JSONObject(jsonStr)
+                    val dir = json.optString("direction", "down")
+                    scrollScreen(dir == "down")
+                }
+                tag.startsWith("[ACTION:GLOBAL:") -> {
+                    val jsonStr = tag.substringAfter("[ACTION:GLOBAL:").substringBeforeLast("]")
+                    val json = JSONObject(jsonStr)
+                    val globalAction = json.optString("action", "back")
+                    performGlobal(globalAction)
+                }
                 tag.contains("[ACTION:READ_SCREEN]") -> {
                     ActionResult.Success("Screen reading session initiated.")
                 }
                 else -> {
-                    ActionResult.Failure("Command not recognized or supported by local device interface.")
+                    ActionResult.Failure("Command processed by Zara.")
                 }
             }
         } catch (e: Exception) {
@@ -291,6 +316,58 @@ class DeviceActionManager(private val context: Context) {
         val clip = ClipData.newPlainText("Zara AI Copied Text", text)
         clipboardManager.setPrimaryClip(clip)
         return ActionResult.Success("Text copied to clipboard.")
+    }
+
+    fun clickOnScreen(target: String): ActionResult {
+        val a11y = com.example.service.ZaraAccessibilityService.instance
+        if (a11y == null) {
+            return ActionResult.Failure("Accessibility Service not enabled. Please enable Zara AI in Accessibility Settings to touch the screen.")
+        }
+        val clicked = a11y.performClickByText(target)
+        return if (clicked) {
+            ActionResult.Success("Successfully tapped '$target' on screen.")
+        } else {
+            ActionResult.Failure("Could not locate '$target' on current screen.")
+        }
+    }
+
+    fun touchCoordinates(x: Float, y: Float): ActionResult {
+        val a11y = com.example.service.ZaraAccessibilityService.instance
+        if (a11y == null) {
+            return ActionResult.Failure("Accessibility Service not enabled.")
+        }
+        val touched = a11y.performTouchCoordinates(x, y)
+        return if (touched) {
+            ActionResult.Success("Touch dispatched at ($x, $y).")
+        } else {
+            ActionResult.Failure("Touch dispatch failed.")
+        }
+    }
+
+    fun scrollScreen(forward: Boolean): ActionResult {
+        val a11y = com.example.service.ZaraAccessibilityService.instance
+        if (a11y == null) {
+            return ActionResult.Failure("Accessibility Service not enabled.")
+        }
+        val scrolled = a11y.performScroll(forward)
+        return if (scrolled) {
+            ActionResult.Success(if (forward) "Scrolled down." else "Scrolled up.")
+        } else {
+            ActionResult.Failure("Could not scroll current window.")
+        }
+    }
+
+    fun performGlobal(action: String): ActionResult {
+        val a11y = com.example.service.ZaraAccessibilityService.instance
+        if (a11y == null) {
+            return ActionResult.Failure("Accessibility Service not enabled.")
+        }
+        val res = a11y.performGlobal(action)
+        return if (res) {
+            ActionResult.Success("Performed navigation '$action'.")
+        } else {
+            ActionResult.Failure("Could not perform navigation '$action'.")
+        }
     }
 
     private fun postLocalNotification(title: String, body: String) {
